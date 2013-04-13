@@ -36,7 +36,7 @@ namespace CrewManifest
 
         #endregion
 
-        private ManifestController()
+        public ManifestController()
         {
             RenderingManager.AddToPostDrawQueue(3, drawGui);
         }
@@ -52,6 +52,11 @@ namespace CrewManifest
             {
                 return Vessel.landedAt == "LaunchPad" || Vessel.landedAt == "Runway";
             }
+        }
+
+        public bool IsFlightScene
+        {
+            get { return HighLogic.LoadedScene == GameScenes.FLIGHT; }
         }
 
         private void AddCrew(int count, Part part)
@@ -94,19 +99,22 @@ namespace CrewManifest
                 kerbal.seat.SpawnCrew();
         }
 
+        private KerbalModel CreateKerbal()
+        {
+            ProtoCrewMember kerbal = CrewGenerator.RandomCrewMemberPrototype();       
+            return new KerbalModel(kerbal, true);
+        }
+
         private void RespawnCrew()
         {
             this.Vessel.SpawnCrew();
         }
 
         #region GUI Stuff
+        private bool resetRosterSize = true;
         public bool ShowWindow { get; set; }
         private bool _showTransferWindow { get; set; }
         private bool _showRosterWindow { get; set; }
-        private Rect _manifestWindow = new Rect(Screen.width * 0.20f, 250, 250, 400);
-        private Rect _transferWindow = new Rect(Screen.width * 0.50f, 250, 250, 400);
-        private Rect _rosterWindow = new Rect(Screen.width * 0.50f, 250, 250, 250);
-
         private Part _selectedPart;
         public Part SelectedPart
         {
@@ -224,25 +232,35 @@ namespace CrewManifest
 
         private void drawGui()
         {
-            if (FlightGlobals.fetch == null) { return; }
-            if (FlightGlobals.ActiveVessel != Vessel)
+            if (FlightGlobals.fetch == null)
             { return; }
 
+            if (FlightGlobals.ActiveVessel != Vessel)
+            { return; }
             GUI.skin = HighLogic.Skin;
 
-            if (ShowWindow)
+            if (resetRosterSize)
             {
-                _manifestWindow = GUILayout.Window(398541, _manifestWindow, ManifestWindow, "Crew Manifest", GUILayout.MinHeight(20));
+                ManifestBehaviour.Settings.RosterPosition.height = 100; //reset hight
+                resetRosterSize = false;
             }
 
-            if (_showTransferWindow)
+            if (HighLogic.LoadedScene == GameScenes.FLIGHT && !MapView.MapIsEnabled && !PauseMenu.isOpen)
             {
-                _transferWindow = GUILayout.Window(398542, _transferWindow, TransferWindow, "Crew Transfer", GUILayout.MinHeight(20));
-            }
+                if (_showRosterWindow)
+                {
+                    ManifestBehaviour.Settings.RosterPosition = GUILayout.Window(398543, ManifestBehaviour.Settings.RosterPosition, RosterWindow, "Crew Roster", GUILayout.MinHeight(20));
+                }
 
-            if (_showRosterWindow)
-            {
-                _rosterWindow = GUILayout.Window(398543, _rosterWindow, RosterWindow, "Crew Roster", GUILayout.MinHeight(20));
+                if (ShowWindow)
+                {
+                    ManifestBehaviour.Settings.ManifestPosition = GUILayout.Window(398541, ManifestBehaviour.Settings.ManifestPosition, ManifestWindow, "Crew Manifest", GUILayout.MinHeight(20));
+                }
+
+                if (_showTransferWindow)
+                {
+                    ManifestBehaviour.Settings.TransferPosition = GUILayout.Window(398542, ManifestBehaviour.Settings.TransferPosition, TransferWindow, "Crew Transfer", GUILayout.MinHeight(20));
+                }
             }
         }
 
@@ -250,8 +268,6 @@ namespace CrewManifest
         private Vector2 partScrollViewer2 = Vector2.zero;
         private void ManifestWindow(int windowId)
         {
-            GUIStyle style = GUI.skin.button;
-            var defaultColor = style.normal.textColor;
             GUILayout.BeginVertical();
 
             partScrollViewer = GUILayout.BeginScrollView(partScrollViewer, GUILayout.Height(200), GUILayout.Width(300));
@@ -259,14 +275,12 @@ namespace CrewManifest
 
             foreach (Part part in CrewableParts)
             {
-                style.normal.textColor = part == SelectedPart ? Color.green : Color.white;
+                var style = part == SelectedPart ? Resources.ButtonToggledStyle : Resources.ButtonStyle;
 
-                if (GUILayout.Button(string.Format("{0} {1}/{2}" , part.partInfo.title, part.protoModuleCrew.Count, part.CrewCapacity), GUILayout.Width(265)))
+                if (GUILayout.Button(string.Format("{0} {1}/{2}" , part.partInfo.title, part.protoModuleCrew.Count, part.CrewCapacity), style, GUILayout.Width(265)))
                 {
                     SelectedPart = part;
                 }
-
-                style.normal.textColor = defaultColor;
             }
 
             GUILayout.EndVertical();
@@ -308,18 +322,22 @@ namespace CrewManifest
 
             GUILayout.BeginHorizontal();
 
-            if (GUILayout.Button(string.Format("Crew Roster"), GUILayout.Width(150)))
+            var crewButtonStyle = _showRosterWindow ? Resources.ButtonToggledStyle : Resources.ButtonStyle;
+            var transferStyle = _showTransferWindow ? Resources.ButtonToggledStyle : Resources.ButtonStyle;
+
+            if (GUILayout.Button("Crew Roster", crewButtonStyle, GUILayout.Width(150)))
             {
                 _showRosterWindow = !_showRosterWindow;
             }
 
-            if (GUILayout.Button(string.Format("Transfer Crew"), GUILayout.Width(150)))
+            if (GUILayout.Button("Transfer Crew", transferStyle, GUILayout.Width(150)))
             {
                 _showTransferWindow = !_showTransferWindow;
                 if (!_showTransferWindow)
                 {
                     ClearHighlight(_selectedPartSource);
                     ClearHighlight(_selectedPartTarget);
+                    _selectedPartSource = _selectedPartTarget = null;
                 }
                     
             }
@@ -335,9 +353,6 @@ namespace CrewManifest
         private Vector2 partTargetScrollViewer2 = Vector2.zero;
         private void TransferWindow(int windowId)
         {
-            GUIStyle style = GUI.skin.button;
-            var defaultColor = style.normal.textColor;
-
             GUILayout.BeginHorizontal();
             GUILayout.BeginVertical();
 
@@ -346,14 +361,12 @@ namespace CrewManifest
 
             foreach (Part part in CrewablePartsSource)
             {
-                style.normal.textColor = part == SelectedPartSource ? Color.green : Color.white;
+                var style = part == SelectedPartSource ? Resources.ButtonToggledStyle : Resources.ButtonStyle;
 
-                if (GUILayout.Button(string.Format("{0} {1}/{2}", part.partInfo.title, part.protoModuleCrew.Count, part.CrewCapacity), GUILayout.Width(265)))
+                if (GUILayout.Button(string.Format("{0} {1}/{2}", part.partInfo.title, part.protoModuleCrew.Count, part.CrewCapacity), style, GUILayout.Width(265)))
                 {
                     SelectedPartSource = part;
                 }
-
-                style.normal.textColor = defaultColor;
             }
 
             GUILayout.EndVertical();
@@ -397,14 +410,12 @@ namespace CrewManifest
 
             foreach (Part part in CrewablePartsTarget)
             {
-                style.normal.textColor = part == SelectedPartTarget ? Color.red : Color.white;
+                var style = part == SelectedPartTarget ? Resources.ButtonToggledRedStyle : Resources.ButtonStyle;
 
-                if (GUILayout.Button(string.Format("{0} {1}/{2}", part.partInfo.title, part.protoModuleCrew.Count, part.CrewCapacity), GUILayout.Width(265)))
+                if (GUILayout.Button(string.Format("{0} {1}/{2}", part.partInfo.title, part.protoModuleCrew.Count, part.CrewCapacity), style, GUILayout.Width(265)))
                 {
                     SelectedPartTarget = part;
                 }
-
-                style.normal.textColor = defaultColor;
             }
 
             GUILayout.EndVertical();
@@ -435,18 +446,27 @@ namespace CrewManifest
             GUILayout.EndVertical();
             GUILayout.EndScrollView();
 
-            if (GUILayout.Button("Close", GUILayout.Width(300)))
-            {
-                _showTransferWindow = false;
-                ClearHighlight(_selectedPartSource);
-                ClearHighlight(_selectedPartTarget);
-            }
-
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
             GUI.DragWindow(new Rect(0, 0, Screen.width, 30));
         }
 
+
+        private string saveMessage = string.Empty;
+        private KerbalModel _selectedKerbal;
+        private KerbalModel SelectedKerbal
+        {
+            get { return _selectedKerbal; }
+            set
+            {
+                _selectedKerbal = value;
+                if (_selectedKerbal == null)
+                {
+                    saveMessage = string.Empty;
+                    resetRosterSize = true;
+                }
+            }
+        }
         private Vector2 rosterScrollViewer = Vector2.zero;
         private void RosterWindow(int windowId)
         {
@@ -460,9 +480,27 @@ namespace CrewManifest
             for (int i = 0; i < KerbalCrewRoster.CrewRoster.Count; i++)
             {
                 ProtoCrewMember kerbal = KerbalCrewRoster.CrewRoster[i];
+                var labelStyle = kerbal.rosterStatus == ProtoCrewMember.RosterStatus.AVAILABLE ? Resources.LabelStyle : Resources.LabelStyleRed;
                 GUILayout.BeginHorizontal();
-                GUILayout.Label(string.Format("{0} ({1})", kerbal.name, kerbal.rosterStatus.ToString()), GUILayout.Width(200));
-                string buttonText;
+                GUILayout.Label(kerbal.name, labelStyle, GUILayout.Width(140));
+                string buttonText = string.Empty;
+
+                if (kerbal.rosterStatus == ProtoCrewMember.RosterStatus.AVAILABLE)
+                    GUI.enabled = true;
+                else
+                    GUI.enabled = false;
+
+                if (GUILayout.Button((SelectedKerbal == null || SelectedKerbal.Kerbal != kerbal) ? "Edit" : "Cancel", GUILayout.Width(60)))
+                {
+                    if (SelectedKerbal == null || SelectedKerbal.Kerbal != kerbal)
+                    {
+                        SelectedKerbal = new KerbalModel(kerbal, false);
+                    }
+                    else
+                    {
+                        SelectedKerbal = null;
+                    }
+                }
 
                 if (kerbal.rosterStatus == ProtoCrewMember.RosterStatus.AVAILABLE && IsPreLaunch && SelectedPart != null && !PartIsFull(SelectedPart))
                 {
@@ -475,9 +513,21 @@ namespace CrewManifest
                     buttonText = "--";
                 }
 
+                if (SelectedKerbal != null && SelectedKerbal.Kerbal == kerbal)
+                {
+                    GUI.enabled = true;
+                    buttonText = "Delete";
+                }
+
                 if (GUILayout.Button(buttonText, GUILayout.Width(60)))
                 {
-                    AddCrew(SelectedPart, kerbal);
+                    if (buttonText == "Add")
+                        AddCrew(SelectedPart, kerbal);
+                    else
+                    {
+                        KerbalCrewRoster.CrewRoster.Remove(SelectedKerbal.Kerbal);
+                        SelectedKerbal = null;
+                    }
                 }
                 GUILayout.EndHorizontal();
                 GUI.enabled = true;
@@ -486,13 +536,58 @@ namespace CrewManifest
             GUILayout.EndVertical();
             GUILayout.EndScrollView();
 
-            if (GUILayout.Button("Close", GUILayout.Width(300)))
+            if (SelectedKerbal != null)
             {
-                _showRosterWindow = false;
+                GUILayout.Label(SelectedKerbal.IsNew ? "Create a Kerbal" : "Edit a Kerbal");
+                SelectedKerbal.Name = GUILayout.TextField(SelectedKerbal.Name);
+
+                if (!string.IsNullOrEmpty(saveMessage))
+                {
+                    GUILayout.Label(saveMessage, Resources.ErrorLabelRedStyle);
+                }
+
+                GUILayout.Label("Courage");
+                SelectedKerbal.Courage = GUILayout.HorizontalSlider(SelectedKerbal.Courage, 0, 1);
+
+                GUILayout.Label("Stupidity");
+                SelectedKerbal.Stupidity = GUILayout.HorizontalSlider(SelectedKerbal.Stupidity, 0, 1);
+
+                SelectedKerbal.Badass = GUILayout.Toggle(SelectedKerbal.Badass, "Badass");
+
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("Cancel", GUILayout.MaxWidth(50)))
+                {
+                    SelectedKerbal = null;
+                }
+                if (GUILayout.Button("Apply", GUILayout.MaxWidth(50)))
+                {
+                    saveMessage = SelectedKerbal.SubmitChanges();
+                    if(string.IsNullOrEmpty(saveMessage))
+                        SelectedKerbal = null;
+                }
+                GUILayout.EndHorizontal();
+            }
+            else
+            {
+                if (GUILayout.Button("Create Kerbal", GUILayout.MaxWidth(120)))
+                {
+                    SelectedKerbal = CreateKerbal();
+                }
             }
 
             GUILayout.EndVertical();
             GUI.DragWindow(new Rect(0, 0, Screen.width, 30));
+        }
+
+        public void HideAllWindows()
+        {
+            _showRosterWindow = false;
+            _showTransferWindow = false;
+            ClearHighlight(_selectedPart);
+            ClearHighlight(_selectedPartSource);
+            ClearHighlight(_selectedPartTarget);
+
+            _selectedPart = _selectedPartSource = _selectedPartTarget = null; //clear selections
         }
 
         private void ClearHighlight(Part part)
