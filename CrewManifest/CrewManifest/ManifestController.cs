@@ -97,6 +97,7 @@ namespace CrewManifest
             target.AddCrewmember(kerbal);
             if (kerbal.seat != null)
                 kerbal.seat.SpawnCrew();
+            kerbal.rosterStatus = ProtoCrewMember.RosterStatus.ASSIGNED;
         }
 
         private KerbalModel CreateKerbal()
@@ -111,6 +112,7 @@ namespace CrewManifest
         }
 
         #region GUI Stuff
+        public bool CanDrawButton = false;
         private bool resetRosterSize = true;
         public bool ShowWindow { get; set; }
         private bool _showTransferWindow { get; set; }
@@ -237,7 +239,8 @@ namespace CrewManifest
 
             if (FlightGlobals.ActiveVessel != Vessel)
             { return; }
-            GUI.skin = HighLogic.Skin;
+
+            Resources.SetupGUI();
 
             if (resetRosterSize)
             {
@@ -245,8 +248,12 @@ namespace CrewManifest
                 resetRosterSize = false;
             }
 
-            if (HighLogic.LoadedScene == GameScenes.FLIGHT && !MapView.MapIsEnabled && !PauseMenu.isOpen)
+            if (HighLogic.LoadedScene == GameScenes.FLIGHT && !MapView.MapIsEnabled && !PauseMenu.isOpen && !FlightResultsDialog.isDisplaying)
             {
+                if (CanDrawButton)
+                {
+                    DrawButton();
+                }
                 if (_showRosterWindow)
                 {
                     ManifestBehaviour.Settings.RosterPosition = GUILayout.Window(398543, ManifestBehaviour.Settings.RosterPosition, RosterWindow, "Crew Roster", GUILayout.MinHeight(20));
@@ -261,6 +268,17 @@ namespace CrewManifest
                 {
                     ManifestBehaviour.Settings.TransferPosition = GUILayout.Window(398542, ManifestBehaviour.Settings.TransferPosition, TransferWindow, "Crew Transfer", GUILayout.MinHeight(20));
                 }
+            }
+        }
+
+        private void DrawButton()
+        {
+            var icon = ShowWindow ? Resources.IconOn : Resources.IconOff;
+            if (GUI.Button(ManifestBehaviour.Settings.ButtonPosition, new GUIContent(icon, "Click to Show Manifest"), Resources.IconStyle))
+            {
+                ShowWindow = !ShowWindow;
+                if (!ShowWindow)
+                    HideAllWindows();
             }
         }
 

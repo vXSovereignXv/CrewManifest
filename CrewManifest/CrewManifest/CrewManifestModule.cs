@@ -15,12 +15,6 @@ namespace CrewManifest
                 this.part.temperature = 5000;
         }
 
-        public override void OnAwake()
-        {
-            if (ManifestBehaviour.GameObjectInstance == null)
-                ManifestBehaviour.GameObjectInstance = GameObject.Find("ManifestBehaviour") ?? new GameObject("ManifestBehaviour", typeof(ManifestBehaviour));
-        }
-
         public override void OnUpdate()
         {
             base.OnUpdate();
@@ -32,75 +26,54 @@ namespace CrewManifest
         }
     }
 
+    public class CrewManifest: KSP.Testing.UnitTest
+    {
+        public CrewManifest()
+            : base()
+        {
+            if (ManifestBehaviour.GameObjectInstance == null)
+                ManifestBehaviour.GameObjectInstance = GameObject.Find("ManifestBehaviour") ?? new GameObject("ManifestBehaviour", typeof(ManifestBehaviour));
+        }
+    }
+
     public class ManifestBehaviour : MonoBehaviour
     {
         //Game object that keeps us running
         public static GameObject GameObjectInstance;
         public static Settings Settings = new Settings();
-        private bool inQueue = false;
         private float interval = 30F;
-        private bool ShouldDrawUI = false;
+        private float intervalCrewCheck = 0.5f;
 
         public void Awake()
         {
             DontDestroyOnLoad(this);
             Resources.LoadAssets();
             Settings.Load();
-            InvokeRepeating("RunTasks", interval, interval);
+            InvokeRepeating("RunSave", interval, interval);
+            InvokeRepeating("CrewCheck", intervalCrewCheck, intervalCrewCheck);
         }
         
         public void Update()
         {
-            ShouldDrawUI = FlightGlobals.fetch != null && FlightGlobals.ActiveVessel != null && HighLogic.LoadedScene == GameScenes.FLIGHT;
-        }
-
-        public void OnGUI()
-        {
-            if (ShouldDrawUI != inQueue)
+            if (FlightGlobals.fetch != null && FlightGlobals.ActiveVessel != null)
             {
-                if (ShouldDrawUI && !inQueue)
+                if (HighLogic.LoadedScene == GameScenes.FLIGHT)
                 {
-                    Debug.Log(string.Format("Manifest Added to queue."));
-                    RenderingManager.AddToPostDrawQueue(6, DrawGUI);
-                    inQueue = true;
-                }
-                else
-                {
-                    Debug.Log(string.Format("Manifest Removed from queue."));
-                    RenderingManager.RemoveFromPostDrawQueue(6, DrawGUI);
-                    inQueue = false;
+                    //Instantiate the controller for the active vessel.
+                    ManifestController.GetInstance(FlightGlobals.ActiveVessel).CanDrawButton = true;
                 }
             }
         }
 
-        public void DrawGUI()
-        {
-            try
-            {
-                SetupGUI();
-
-                if (FlightGlobals.fetch != null && FlightGlobals.ActiveVessel != null && !MapView.MapIsEnabled && !PauseMenu.isOpen)
-                {
-                    var controller = ManifestController.GetInstance(FlightGlobals.ActiveVessel);
-                    var icon = controller.ShowWindow ? Resources.IconOn : Resources.IconOff;
-                    if (GUI.Button(Settings.ButtonPosition, new GUIContent(icon, "Click to Show Manifest"), Resources.IconStyle))
-                    {
-                        controller.ShowWindow = !controller.ShowWindow;
-                        if (!controller.ShowWindow)
-                            controller.HideAllWindows();
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.Log(e.StackTrace);
-            }
-        }
-
-        public void RunTasks()
+        public void CrewCheck()
         {
             if (Settings.EnablePermaDeath)
                 Executekerbals();
+            CheckKerbalInconsistency();
+        }
+
+        public void RunSave()
+        {
             Save();
         }
 
@@ -114,7 +87,8 @@ namespace CrewManifest
 
         private void Executekerbals()
         {
-            if (HighLogic.LoadedScene == GameScenes.FLIGHT && FlightGlobals.fetch != null && FlightGlobals.ActiveVessel != null)
+            //Persistence file doesn't look to be saved outside of the flight scene. Make changes there.
+            if (HighLogic.LoadedScene == GameScenes.FLIGHT && FlightGlobals.fetch != null)
             {
                 List<ProtoCrewMember> kerbalsToKill = new List<ProtoCrewMember>();
 
@@ -132,12 +106,24 @@ namespace CrewManifest
             }
         }
 
-        private void SetupGUI()
+        private void CheckKerbalInconsistency()
         {
-            GUI.skin = HighLogic.Skin;
-            if (Resources.WindowStyle == null)
+            if (HighLogic.LoadedScene == GameScenes.FLIGHT && FlightGlobals.fetch != null && FlightGlobals.ActiveVessel != null)
             {
-                Resources.SetStyles();
+                var activeCrew = FlightGlobals.ActiveVessel.GetVesselCrew();
+                foreach (var kerbal in activeCrew)
+                {
+                    //If kerbals are in the vessel they should be assigned. I've seen the state get messed up
+                    //when restarting a flight.
+                    if(kerbal.rosterStatus != ProtoCrewMember.RosterStatus.ASSIGNED)
+                        kerbal.rosterStatus = ProtoCrewMember.RosterStatus.ASSIGNED;
+
+                    if (!KerbalCrewRoster.CrewRoster.Contains(kerbal))
+                    {
+                        //Add kerbal back if they are in vessel but not roster
+                        KerbalCrewRoster.CrewRoster.Add(kerbal);
+                    }
+                }
             }
         }
     }

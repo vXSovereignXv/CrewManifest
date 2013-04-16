@@ -32,6 +32,15 @@ namespace CrewManifest
         public static GUIStyle LabelStyle;
         public static GUIStyle LabelStyleRed;
 
+        public static void SetupGUI()
+        {
+            GUI.skin = HighLogic.Skin;
+            if (WindowStyle == null)
+            {
+                SetStyles();
+            }
+        }
+
         public static void LoadAssets()
         {
             ManifestUtilities.LoadTexture(ref IconOff, "IconOff.png");
