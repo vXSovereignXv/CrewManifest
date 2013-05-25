@@ -26,21 +26,12 @@ namespace CrewManifest
         }
     }
 
-    public class CrewManifest: KSP.Testing.UnitTest
-    {
-        public CrewManifest()
-            : base()
-        {
-            if (ManifestBehaviour.GameObjectInstance == null)
-                ManifestBehaviour.GameObjectInstance = GameObject.Find("ManifestBehaviour") ?? new GameObject("ManifestBehaviour", typeof(ManifestBehaviour));
-        }
-    }
-
+    [KSPAddon(KSPAddon.Startup.EveryScene, false)]
     public class ManifestBehaviour : MonoBehaviour
     {
         //Game object that keeps us running
         public static GameObject GameObjectInstance;
-        public static Settings Settings = new Settings();
+        public static SettingsManager Settings = new SettingsManager();
         private float interval = 30F;
         private float intervalCrewCheck = 0.5f;
 
@@ -51,6 +42,26 @@ namespace CrewManifest
             Settings.Load();
             InvokeRepeating("RunSave", interval, interval);
             InvokeRepeating("CrewCheck", intervalCrewCheck, intervalCrewCheck);
+        }
+
+        public void OnDestroy()
+        {
+            CancelInvoke("RunSave");
+            CancelInvoke("CrewCheck");
+        }
+
+        public void OnGUI()
+        {
+            Resources.SetupGUI();
+            if (HighLogic.LoadedScene == GameScenes.SPACECENTER)
+            {
+                DrawButton();
+                if (Settings.ShowSettings)
+                    Settings.DrawSettingsGUI();
+            }
+
+            if(Settings.ShowDebugger)
+                Settings.DebuggerPosition = GUILayout.Window(398643, Settings.DebuggerPosition, DrawDebugger, "Manifest Debug Console", GUILayout.MinHeight(20));
         }
         
         public void Update()
@@ -81,6 +92,7 @@ namespace CrewManifest
         {
             if (HighLogic.LoadedScene == GameScenes.FLIGHT && FlightGlobals.fetch != null && FlightGlobals.ActiveVessel != null)
             {
+                ManifestUtilities.LogMessage("Saving Manifest Settings...", "Info");
                 Settings.Save();
             }
         }
@@ -101,6 +113,7 @@ namespace CrewManifest
 
                 for (int i = kerbalsToKill.Count - 1; i >= 0; i--)
                 {
+                    ManifestUtilities.LogMessage(string.Format("{0} is dead. removing from roster", kerbalsToKill[i].name), "Info");
                     KerbalCrewRoster.CrewRoster.Remove(kerbalsToKill[i]);
                 }
             }
@@ -121,10 +134,37 @@ namespace CrewManifest
                     if (!KerbalCrewRoster.CrewRoster.Contains(kerbal))
                     {
                         //Add kerbal back if they are in vessel but not roster
+                        ManifestUtilities.LogMessage(string.Format("Could not find {0}. Adding back to roster...", kerbal.name), "Info");
                         KerbalCrewRoster.CrewRoster.Add(kerbal);
                     }
                 }
             }
+        }
+
+        private void DrawButton()
+        {
+            var icon = Settings.ShowSettings ? Resources.IconOn : Resources.IconOff;
+            if (GUI.Button(Settings.ButtonPosition, new GUIContent(icon, "Manifest Settings"), Resources.IconStyle))
+            {
+                Settings.ShowSettings = true;
+            }
+        }
+
+        private void DrawDebugger(int windowId)
+        {
+            GUILayout.BeginVertical();
+
+            ManifestUtilities.DebugScrollPosition = GUILayout.BeginScrollView(ManifestUtilities.DebugScrollPosition, GUILayout.Height(300), GUILayout.Width(500));
+            GUILayout.BeginVertical();
+
+            foreach(string error in ManifestUtilities.Errors)
+                GUILayout.TextArea(error, GUILayout.Width(460));
+
+            GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+
+            GUILayout.EndVertical();
+            GUI.DragWindow(new Rect(0, 0, Screen.width, 30));
         }
     }
 }

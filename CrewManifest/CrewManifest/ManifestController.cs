@@ -271,6 +271,7 @@ namespace CrewManifest
             }
         }
 
+        Rect ButtonPosition = new Rect(200, 0, 32, 32);
         private void DrawButton()
         {
             var icon = ShowWindow ? Resources.IconOn : Resources.IconOff;
