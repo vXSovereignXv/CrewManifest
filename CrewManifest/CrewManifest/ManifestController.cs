@@ -100,6 +100,33 @@ namespace CrewManifest
             kerbal.rosterStatus = ProtoCrewMember.RosterStatus.ASSIGNED;
         }
 
+        private void FillVessel()
+        {
+            foreach (var part in CrewableParts)
+            {
+                AddCrew(part.CrewCapacity - part.protoModuleCrew.Count, part);
+            }
+        }
+
+        private void EmptyVessel()
+        {
+            foreach (var part in CrewableParts)
+            {
+                for (int i = part.protoModuleCrew.Count - 1; i >= 0; i--)
+                {
+                    RemoveCrew(part.protoModuleCrew[i], part);
+                }
+            }
+        }
+
+        private void RespawnKerbal(ProtoCrewMember kerbal)
+        {
+            kerbal.SetTimeForRespawn(0);
+            kerbal.Spawn();
+            kerbal.rosterStatus = ProtoCrewMember.RosterStatus.AVAILABLE;
+            KerbalCrewRoster.getNextAvailableCrewMember();
+        }
+
         private KerbalModel CreateKerbal()
         {
             ProtoCrewMember kerbal = CrewGenerator.RandomCrewMemberPrototype();       
@@ -271,7 +298,6 @@ namespace CrewManifest
             }
         }
 
-        Rect ButtonPosition = new Rect(200, 0, 32, 32);
         private void DrawButton()
         {
             var icon = ShowWindow ? Resources.IconOn : Resources.IconOff;
@@ -291,6 +317,20 @@ namespace CrewManifest
 
             partScrollViewer = GUILayout.BeginScrollView(partScrollViewer, GUILayout.Height(200), GUILayout.Width(300));
             GUILayout.BeginVertical();
+
+            if (IsPreLaunch)
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button(string.Format("Fill Vessel"), GUILayout.Width(130)))
+                {
+                    FillVessel();
+                }
+                if (GUILayout.Button(string.Format("Empty Vessel"), GUILayout.Width(130)))
+                {
+                    EmptyVessel();
+                }
+                GUILayout.EndHorizontal();
+            }
 
             foreach (Part part in CrewableParts)
             {
@@ -312,6 +352,14 @@ namespace CrewManifest
 
             if (SelectedPart != null)
             {
+                if (!PartIsFull(SelectedPart) && IsPreLaunch)
+                {
+                    if (GUILayout.Button(string.Format("Add a Kerbal"), GUILayout.Width(275)))
+                    {
+                        AddCrew(1, SelectedPart);
+                    }
+                }
+
                 for (int i = 0; i < SelectedPart.protoModuleCrew.Count; i++)
                 {
                     ProtoCrewMember kerbal = SelectedPart.protoModuleCrew[i];
@@ -326,16 +374,8 @@ namespace CrewManifest
                     }
                     GUILayout.EndHorizontal();
                 }
-
-                if (!PartIsFull(SelectedPart) && IsPreLaunch)
-                {
-                    if (GUILayout.Button(string.Format("Add a Kerbal"), GUILayout.Width(275)))
-                    {
-                        AddCrew(1, SelectedPart);
-                    }
-                }
-
             }
+
             GUILayout.EndVertical();
             GUILayout.EndScrollView();
 
@@ -470,7 +510,6 @@ namespace CrewManifest
             GUI.DragWindow(new Rect(0, 0, Screen.width, 30));
         }
 
-
         private string saveMessage = string.Empty;
         private KerbalModel _selectedKerbal;
         private KerbalModel SelectedKerbal
@@ -499,7 +538,14 @@ namespace CrewManifest
             for (int i = 0; i < KerbalCrewRoster.CrewRoster.Count; i++)
             {
                 ProtoCrewMember kerbal = KerbalCrewRoster.CrewRoster[i];
-                var labelStyle = kerbal.rosterStatus == ProtoCrewMember.RosterStatus.AVAILABLE ? Resources.LabelStyle : Resources.LabelStyleRed;
+                GUIStyle labelStyle = null;
+                if (kerbal.rosterStatus == ProtoCrewMember.RosterStatus.RESPAWN)
+                    labelStyle = Resources.LabelStyleRed;
+                else if (kerbal.rosterStatus == ProtoCrewMember.RosterStatus.ASSIGNED)
+                    labelStyle = Resources.LabelStyleYellow;
+                else
+                    labelStyle = Resources.LabelStyle;
+
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(kerbal.name, labelStyle, GUILayout.Width(140));
                 string buttonText = string.Empty;
@@ -526,6 +572,11 @@ namespace CrewManifest
                     GUI.enabled = true;
                     buttonText = "Add";
                 }
+                else if (kerbal.rosterStatus == ProtoCrewMember.RosterStatus.RESPAWN && ManifestBehaviour.Settings.AllowRespawn)
+                {
+                    GUI.enabled = true;
+                    buttonText = "Respawn";
+                }
                 else
                 {
                     GUI.enabled = false;
@@ -542,6 +593,8 @@ namespace CrewManifest
                 {
                     if (buttonText == "Add")
                         AddCrew(SelectedPart, kerbal);
+                    else if (buttonText == "Respawn")
+                        RespawnKerbal(kerbal);
                     else
                     {
                         KerbalCrewRoster.CrewRoster.Remove(SelectedKerbal.Kerbal);

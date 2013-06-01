@@ -2,6 +2,7 @@
 <config>
   <bool name="EnablePermaDeath">0</bool>
   <bool name="ShowDebugger">0</bool>
+  <bool name="AllowRespawn">0</bool>
   <rect name="ManifestPosition">
     <xmin>4</xmin>
     <xmax>323</xmax>

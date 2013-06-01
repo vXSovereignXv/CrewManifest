@@ -10,7 +10,7 @@ namespace CrewManifest
     public static class ManifestUtilities
     {
         public static String AppPath = KSPUtil.ApplicationRootPath.Replace("\\", "/");
-        public static String PlugInPath = AppPath + "GameData/CrewManifest/Plugins/PluginData/crewmanifest/";
+        public static String PlugInPath = AppPath + "GameData/CrewManifest/Plugins/PluginData/CrewManifest/";
         public static Vector2 DebugScrollPosition = Vector2.zero;
 
         private static List<string> _errors = new List<string>();
@@ -45,6 +45,7 @@ namespace CrewManifest
         public static GUIStyle ErrorLabelRedStyle;
         public static GUIStyle LabelStyle;
         public static GUIStyle LabelStyleRed;
+        public static GUIStyle LabelStyleYellow;
 
         public static void SetupGUI()
         {
@@ -84,6 +85,9 @@ namespace CrewManifest
 
             LabelStyleRed = new GUIStyle(LabelStyle);
             LabelStyleRed.normal.textColor = Color.red;
+
+            LabelStyleYellow = new GUIStyle(LabelStyle);
+            LabelStyleYellow.normal.textColor = Color.yellow;
         }
     }
 
@@ -101,9 +105,12 @@ namespace CrewManifest
         public Rect PrevRosterPosition;
         public Rect PrevButtonPosition;
         public bool PrevEnablePermaDeath;
+        public bool PrevShowDebugger;
+        public bool PrevAllowRespawn;
 
         public Rect DebuggerPosition;
         public bool ShowDebugger;
+        public bool AllowRespawn;
 
         public void Load()
         {
@@ -121,7 +128,8 @@ namespace CrewManifest
                 SettingsPosition = new Rect(ButtonPosition.xMin > Screen.width - 200 ? Screen.width - 200 : ButtonPosition.xMin, ButtonPosition.yMax + 5 > Screen.height - 200 ? Screen.height - 200 : ButtonPosition.yMax + 5, 200, 20);
                 EnablePermaDeath = PrevEnablePermaDeath = configfile.GetValue<bool>("EnablePermaDeath");
                 DebuggerPosition = configfile.GetValue<Rect>("DebuggerPosition");
-                ShowDebugger = configfile.GetValue<bool>("ShowDebugger");
+                ShowDebugger = PrevShowDebugger = configfile.GetValue<bool>("ShowDebugger");
+                AllowRespawn = PrevAllowRespawn = configfile.GetValue<bool>("AllowRespawn");
 
                 ManifestUtilities.LogMessage(string.Format("ManifestPosition Loaded: {0}, {1}, {2}, {3}", ManifestPosition.xMin, ManifestPosition.xMax, ManifestPosition.yMin, ManifestPosition.yMax), "Info");
                 ManifestUtilities.LogMessage(string.Format("TransferPosition Loaded: {0}, {1}, {2}, {3}", TransferPosition.xMin, TransferPosition.xMax, TransferPosition.yMin, TransferPosition.yMax), "Info");
@@ -130,6 +138,7 @@ namespace CrewManifest
                 ManifestUtilities.LogMessage(string.Format("DebuggerPosition Loaded: {0}, {1}, {2}, {3}", DebuggerPosition.xMin, DebuggerPosition.xMax, DebuggerPosition.yMin, DebuggerPosition.yMax), "Info");
                 ManifestUtilities.LogMessage(string.Format("EnablePermaDeath Loaded: {0}", EnablePermaDeath.ToString()), "Info");
                 ManifestUtilities.LogMessage(string.Format("ShowDebugger Loaded: {0}", ShowDebugger.ToString()), "Info");
+                ManifestUtilities.LogMessage(string.Format("AllowRespawn Loaded: {0}", AllowRespawn.ToString()), "Info");
             }
             catch(Exception e)
             {
@@ -150,6 +159,7 @@ namespace CrewManifest
                 configfile.SetValue("DebuggerPosition", DebuggerPosition);
                 configfile.SetValue("EnablePermaDeath", EnablePermaDeath);
                 configfile.SetValue("ShowDebugger", ShowDebugger);
+                configfile.SetValue("AllowRespawn", AllowRespawn);
 
                 configfile.save();
 
@@ -158,6 +168,8 @@ namespace CrewManifest
                 PrevRosterPosition = RosterPosition;
                 PrevButtonPosition = ButtonPosition;
                 PrevEnablePermaDeath = EnablePermaDeath;
+                PrevShowDebugger = ShowDebugger;
+                PrevAllowRespawn = AllowRespawn;
                 SettingsPosition = new Rect(ButtonPosition.xMin > Screen.width - 200 ? Screen.width - 200 : ButtonPosition.xMin, ButtonPosition.yMax + 5 > Screen.height - 200 ? Screen.height - 200 : ButtonPosition.yMax + 5, 200, 20);
 
                 ManifestUtilities.LogMessage(string.Format("ManifestPosition Saved: {0}, {1}, {2}, {3}", ManifestPosition.xMin, ManifestPosition.xMax, ManifestPosition.yMin, ManifestPosition.yMax), "Info");
@@ -167,6 +179,7 @@ namespace CrewManifest
                 ManifestUtilities.LogMessage(string.Format("DebuggerPosition Saved: {0}, {1}, {2}, {3}", DebuggerPosition.xMin, DebuggerPosition.xMax, DebuggerPosition.yMin, DebuggerPosition.yMax), "Info");
                 ManifestUtilities.LogMessage(string.Format("EnablePermaDeath Saved: {0}", EnablePermaDeath.ToString()), "Info");
                 ManifestUtilities.LogMessage(string.Format("ShowDebugger Saved: {0}", ShowDebugger.ToString()), "Info");
+                ManifestUtilities.LogMessage(string.Format("AllowRespawn Saved: {0}", ShowDebugger.ToString()), "Info");
             }
             catch (Exception e)
             {
@@ -225,8 +238,11 @@ namespace CrewManifest
             string label = EnablePermaDeath ? "Permadeath Enabled" : "Permadeath Disabled";
             EnablePermaDeath = GUILayout.Toggle(EnablePermaDeath, label);
 
-            label = ShowDebugger ? "Hide Debug Console" : "Show Debug Console";
+            label = ShowDebugger ? "Disable Debug Console" : "Enable Debug Console";
             ShowDebugger = GUILayout.Toggle(ShowDebugger, label);
+
+            label = AllowRespawn ? "Disable Respawn" : "Enable Respawn";
+            AllowRespawn = GUILayout.Toggle(AllowRespawn, label);
 
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Save"))
@@ -241,6 +257,8 @@ namespace CrewManifest
                 RosterPosition = PrevRosterPosition;
                 ButtonPosition = PrevButtonPosition;
                 EnablePermaDeath = PrevEnablePermaDeath;
+                ShowDebugger = PrevShowDebugger;
+                AllowRespawn = PrevAllowRespawn;
                 ShowSettings = false;
             }
             GUILayout.EndHorizontal();
